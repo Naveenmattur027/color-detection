@@ -1,387 +1,418 @@
 import streamlit as st
 import cv2
 import numpy as np
-import collections
 from PIL import Image
-import threading
-import time
-import queue
 
-class MultiColorTracker:
-    def __init__(self, buffer_size=64):
-        """
-        Initialize the multi-color tracker that detects all colors
-        """
-        self.buffer_size = buffer_size
-        self.tracked_objects = {}  # Dictionary to store multiple object trails
+class UltraColorDetector:
+    def __init__(self):
+        """Initialize with comprehensive color database - 100+ colors"""
         
-        # Define comprehensive HSV color ranges
+        # Comprehensive HSV color ranges for maximum detection
         self.color_ranges = {
-            'Red': [([0, 50, 50], [10, 255, 255]), ([170, 50, 50], [180, 255, 255])],
-            'Orange': [([10, 50, 50], [25, 255, 255])],
-            'Yellow': [([25, 50, 50], [35, 255, 255])],
-            'Green': [([35, 50, 50], [85, 255, 255])],
-            'Cyan': [([85, 50, 50], [95, 255, 255])],
-            'Blue': [([95, 50, 50], [125, 255, 255])],
-            'Purple': [([125, 50, 50], [145, 255, 255])],
-            'Pink': [([145, 50, 50], [170, 255, 255])]
+            # REDS
+            'red': [(np.array([0, 120, 70]), np.array([10, 255, 255])), 
+                    (np.array([170, 120, 70]), np.array([180, 255, 255]))],
+            'crimson': [(np.array([0, 150, 100]), np.array([15, 255, 255]))],
+            'scarlet': [(np.array([0, 200, 150]), np.array([10, 255, 255]))],
+            'cherry': [(np.array([170, 100, 80]), np.array([180, 255, 255]))],
+            'rose': [(np.array([0, 80, 150]), np.array([15, 200, 255]))],
+            'brick': [(np.array([0, 100, 50]), np.array([15, 255, 180]))],
+            'burgundy': [(np.array([0, 150, 30]), np.array([15, 255, 120]))],
+            'maroon': [(np.array([0, 100, 30]), np.array([15, 255, 100]))],
+            'ruby': [(np.array([170, 180, 100]), np.array([180, 255, 255]))],
+            'coral': [(np.array([0, 100, 150]), np.array([20, 255, 255]))],
+            
+            # ORANGES
+            'orange': [(np.array([10, 100, 100]), np.array([25, 255, 255]))],
+            'tangerine': [(np.array([12, 150, 150]), np.array([22, 255, 255]))],
+            'peach': [(np.array([8, 80, 180]), np.array([25, 200, 255]))],
+            'apricot': [(np.array([15, 100, 200]), np.array([25, 180, 255]))],
+            'amber': [(np.array([20, 100, 150]), np.array([30, 255, 255]))],
+            'copper': [(np.array([15, 120, 80]), np.array([25, 255, 200]))],
+            'bronze': [(np.array([18, 100, 60]), np.array([30, 255, 150]))],
+            'rust': [(np.array([10, 150, 80]), np.array([20, 255, 180]))],
+            'papaya': [(np.array([18, 120, 200]), np.array([28, 200, 255]))],
+            'mango': [(np.array([20, 150, 180]), np.array([30, 255, 255]))],
+            
+            # YELLOWS
+            'yellow': [(np.array([20, 100, 100]), np.array([35, 255, 255]))],
+            'gold': [(np.array([22, 120, 150]), np.array([35, 255, 255]))],
+            'lemon': [(np.array([25, 150, 180]), np.array([35, 255, 255]))],
+            'canary': [(np.array([25, 180, 200]), np.array([35, 255, 255]))],
+            'banana': [(np.array([22, 100, 180]), np.array([35, 200, 255]))],
+            'cream': [(np.array([20, 30, 200]), np.array([35, 100, 255]))],
+            'butter': [(np.array([25, 80, 200]), np.array([35, 150, 255]))],
+            'ivory': [(np.array([20, 20, 220]), np.array([35, 80, 255]))],
+            'champagne': [(np.array([25, 40, 180]), np.array([35, 120, 255]))],
+            'mustard': [(np.array([25, 120, 100]), np.array([35, 255, 200]))],
+            
+            # GREENS
+            'green': [(np.array([40, 50, 50]), np.array([80, 255, 255]))],
+            'lime': [(np.array([60, 120, 120]), np.array([80, 255, 255]))],
+            'forest': [(np.array([50, 100, 30]), np.array([70, 255, 120]))],
+            'emerald': [(np.array([55, 150, 80]), np.array([75, 255, 200]))],
+            'jade': [(np.array([60, 80, 100]), np.array([80, 200, 200]))],
+            'mint': [(np.array([75, 50, 180]), np.array([85, 150, 255]))],
+            'olive': [(np.array([35, 100, 50]), np.array([55, 255, 150]))],
+            'sage': [(np.array([70, 30, 120]), np.array([90, 100, 200]))],
+            'pine': [(np.array([45, 120, 40]), np.array([65, 255, 120]))],
+            'moss': [(np.array([50, 80, 60]), np.array([70, 200, 140]))],
+            'kelly': [(np.array([50, 180, 100]), np.array([70, 255, 200]))],
+            'chartreuse': [(np.array([65, 100, 150]), np.array([85, 255, 255]))],
+            
+            # CYANS/TEALS
+            'cyan': [(np.array([80, 100, 100]), np.array([100, 255, 255]))],
+            'teal': [(np.array([85, 120, 80]), np.array([95, 255, 200]))],
+            'turquoise': [(np.array([85, 100, 150]), np.array([95, 255, 255]))],
+            'aqua': [(np.array([82, 80, 180]), np.array([98, 200, 255]))],
+            'seafoam': [(np.array([80, 60, 160]), np.array([100, 150, 255]))],
+            'mint_blue': [(np.array([85, 40, 200]), np.array([95, 120, 255]))],
+            'powder_blue': [(np.array([90, 30, 220]), np.array([110, 80, 255]))],
+            
+            # BLUES
+            'blue': [(np.array([100, 50, 50]), np.array([130, 255, 255]))],
+            'navy': [(np.array([110, 100, 30]), np.array([130, 255, 100]))],
+            'royal': [(np.array([115, 150, 100]), np.array([125, 255, 200]))],
+            'sky': [(np.array([105, 80, 180]), np.array([125, 200, 255]))],
+            'azure': [(np.array([110, 100, 200]), np.array([125, 180, 255]))],
+            'cobalt': [(np.array([115, 180, 80]), np.array([125, 255, 180]))],
+            'sapphire': [(np.array([115, 150, 60]), np.array([125, 255, 150]))],
+            'steel': [(np.array([105, 80, 100]), np.array([125, 150, 200]))],
+            'denim': [(np.array([110, 120, 60]), np.array([125, 200, 140]))],
+            'periwinkle': [(np.array([120, 60, 180]), np.array([135, 150, 255]))],
+            'cornflower': [(np.array([115, 100, 180]), np.array([130, 200, 255]))],
+            
+            # PURPLES/VIOLETS
+            'purple': [(np.array([130, 50, 50]), np.array([170, 255, 255]))],
+            'violet': [(np.array([125, 100, 100]), np.array([145, 255, 255]))],
+            'indigo': [(np.array([105, 100, 50]), np.array([125, 255, 150]))],
+            'plum': [(np.array([140, 80, 80]), np.array([160, 200, 200]))],
+            'lavender': [(np.array([135, 40, 180]), np.array([155, 120, 255]))],
+            'orchid': [(np.array([140, 100, 150]), np.array([160, 255, 255]))],
+            'amethyst': [(np.array([135, 120, 100]), np.array([155, 255, 200]))],
+            'lilac': [(np.array([140, 50, 200]), np.array([160, 150, 255]))],
+            'mauve': [(np.array([145, 80, 120]), np.array([165, 180, 220]))],
+            'eggplant': [(np.array([140, 150, 40]), np.array([160, 255, 120]))],
+            'grape': [(np.array([135, 100, 60]), np.array([155, 255, 150]))],
+            
+            # PINKS/MAGENTAS
+            'pink': [(np.array([140, 50, 150]), np.array([170, 255, 255]))],
+            'magenta': [(np.array([145, 100, 100]), np.array([165, 255, 255]))],
+            'fuchsia': [(np.array([150, 150, 150]), np.array([170, 255, 255]))],
+            'hot_pink': [(np.array([155, 180, 180]), np.array([175, 255, 255]))],
+            'rose_pink': [(np.array([0, 80, 180]), np.array([15, 200, 255]))],
+            'blush': [(np.array([0, 40, 220]), np.array([15, 120, 255]))],
+            'salmon': [(np.array([0, 100, 180]), np.array([20, 200, 255]))],
+            'flamingo': [(np.array([155, 120, 200]), np.array([175, 255, 255]))],
+            'bubblegum': [(np.array([160, 100, 220]), np.array([175, 200, 255]))],
+            'carnation': [(np.array([0, 60, 200]), np.array([15, 150, 255]))],
+            
+            # BROWNS/TANS
+            'brown': [(np.array([10, 50, 20]), np.array([25, 255, 200]))],
+            'tan': [(np.array([15, 80, 120]), np.array([30, 180, 220]))],
+            'beige': [(np.array([15, 30, 180]), np.array([30, 100, 255]))],
+            'khaki': [(np.array([25, 60, 140]), np.array([35, 150, 220]))],
+            'chocolate': [(np.array([12, 120, 50]), np.array([22, 255, 150]))],
+            'coffee': [(np.array([15, 100, 40]), np.array([25, 255, 120]))],
+            'caramel': [(np.array([18, 100, 100]), np.array([28, 200, 200]))],
+            'cinnamon': [(np.array([15, 120, 80]), np.array([25, 255, 180]))],
+            'chestnut': [(np.array([12, 150, 60]), np.array([22, 255, 140]))],
+            'mahogany': [(np.array([8, 120, 40]), np.array([18, 255, 100]))],
+            'sienna': [(np.array([15, 150, 70]), np.array([25, 255, 160]))],
+            
+            # NEUTRALS
+            'white': [(np.array([0, 0, 200]), np.array([180, 30, 255]))],
+            'black': [(np.array([0, 0, 0]), np.array([180, 255, 50]))],
+            'gray': [(np.array([0, 0, 50]), np.array([180, 30, 200]))],
+            'silver': [(np.array([0, 0, 120]), np.array([180, 20, 220]))],
+            'charcoal': [(np.array([0, 0, 30]), np.array([180, 50, 100]))],
+            'slate': [(np.array([200, 10, 80]), np.array([220, 50, 150]))],
+            'pearl': [(np.array([0, 0, 230]), np.array([180, 20, 255]))],
+            'ash': [(np.array([0, 0, 100]), np.array([180, 40, 180]))],
+            'smoke': [(np.array([0, 0, 120]), np.array([180, 30, 180]))],
+            
+            # SPECIALTY COLORS
+            'neon_green': [(np.array([60, 200, 200]), np.array([80, 255, 255]))],
+            'neon_pink': [(np.array([160, 200, 200]), np.array([175, 255, 255]))],
+            'neon_blue': [(np.array([110, 200, 200]), np.array([125, 255, 255]))],
+            'neon_yellow': [(np.array([25, 200, 200]), np.array([35, 255, 255]))],
+            'electric_blue': [(np.array([115, 255, 255]), np.array([125, 255, 255]))],
+            'hot_magenta': [(np.array([155, 255, 200]), np.array([170, 255, 255]))],
+            'lime_green': [(np.array([70, 200, 180]), np.array([85, 255, 255]))],
         }
         
-        # Color to BGR mapping for visualization
-        self.color_bgr = {
-            'Red': (0, 0, 255),
-            'Orange': (0, 165, 255),
-            'Yellow': (0, 255, 255),
-            'Green': (0, 255, 0),
-            'Cyan': (255, 255, 0),
-            'Blue': (255, 0, 0),
-            'Purple': (128, 0, 128),
-            'Pink': (203, 192, 255)
-        }
-        
-        # Camera properties
-        self.cap = None
-        self.frame_queue = queue.Queue(maxsize=2)
-        self.camera_thread = None
-        self.camera_running = False
-        
-    def start_camera(self, camera_index=0):
-        """Start camera capture in separate thread"""
-        if self.camera_running:
-            return True
-            
-        self.cap = cv2.VideoCapture(camera_index)
-        if not self.cap.isOpened():
-            return False
-            
-        # Set camera properties for better performance
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.cap.set(cv2.CAP_PROP_FPS, 30)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        
-        self.camera_running = True
-        self.camera_thread = threading.Thread(target=self._camera_loop)
-        self.camera_thread.daemon = True
-        self.camera_thread.start()
-        
-        return True
+        # Detection settings
+        self.min_area = 300
     
-    def _camera_loop(self):
-        """Camera capture loop running in separate thread"""
-        while self.camera_running and self.cap and self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if ret:
-                if not self.frame_queue.full():
-                    self.frame_queue.put(frame)
-                else:
-                    try:
-                        self.frame_queue.get_nowait()
-                        self.frame_queue.put(frame)
-                    except queue.Empty:
-                        pass
-            time.sleep(0.01)
+    def preprocess_image(self, image):
+        """Preprocess image for better color detection"""
+        if isinstance(image, Image.Image):
+            image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        
+        # Apply bilateral filter for noise reduction
+        filtered = cv2.bilateralFilter(image, 9, 75, 75)
+        
+        # Enhance contrast
+        lab = cv2.cvtColor(filtered, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        enhanced = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+        
+        # Convert to HSV
+        hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
+        
+        return image, hsv
     
-    def stop_camera(self):
-        """Stop camera capture"""
-        self.camera_running = False
-        if self.camera_thread:
-            self.camera_thread.join(timeout=1.0)
-        if self.cap:
-            self.cap.release()
-            self.cap = None
-    
-    def get_latest_frame(self):
-        """Get the latest frame from camera"""
-        try:
-            return self.frame_queue.get_nowait()
-        except queue.Empty:
-            return None
-    
-    def create_color_mask(self, hsv_frame, color_name):
-        """Create mask for a specific color"""
+    def create_color_mask(self, hsv_image, color_name):
+        """Create mask for specific color"""
         masks = []
         
         for lower, upper in self.color_ranges[color_name]:
-            mask = cv2.inRange(hsv_frame, np.array(lower), np.array(upper))
+            mask = cv2.inRange(hsv_image, lower, upper)
             masks.append(mask)
         
-        # Combine all masks for this color
-        final_mask = masks[0]
+        # Combine masks
+        combined_mask = masks[0]
         for mask in masks[1:]:
-            final_mask = cv2.bitwise_or(final_mask, mask)
+            combined_mask = cv2.bitwise_or(combined_mask, mask)
         
         # Apply morphological operations
-        kernel_size = st.session_state.get('kernel_size', 5)
-        kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel)
-        final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel)
-        final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
+        kernel = np.ones((3, 3), np.uint8)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+        combined_mask = cv2.medianBlur(combined_mask, 5)
         
-        return final_mask
+        return combined_mask
     
-    def find_largest_contour(self, mask):
-        """Find the largest contour in the mask"""
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    def detect_colors(self, image):
+        """Detect all colors in the image"""
+        original_image, hsv_image = self.preprocess_image(image)
+        detected_colors = []
+        result_image = original_image.copy()
         
-        if not contours:
-            return None, None
+        # Color mapping for visualization (BGR)
+        color_bgr_map = {
+            # Reds
+            'red': (0, 0, 255), 'crimson': (20, 20, 220), 'scarlet': (0, 20, 255),
+            'cherry': (0, 30, 200), 'rose': (80, 80, 255), 'brick': (40, 40, 180),
+            'burgundy': (20, 0, 100), 'maroon': (0, 0, 128), 'ruby': (0, 40, 200),
+            'coral': (80, 127, 255),
+            
+            # Oranges
+            'orange': (0, 165, 255), 'tangerine': (0, 140, 255), 'peach': (180, 200, 255),
+            'apricot': (180, 215, 255), 'amber': (0, 191, 255), 'copper': (72, 118, 184),
+            'bronze': (40, 120, 205), 'rust': (41, 69, 183), 'papaya': (113, 179, 255),
+            'mango': (96, 190, 255),
+            
+            # Yellows
+            'yellow': (0, 255, 255), 'gold': (0, 215, 255), 'lemon': (0, 250, 255),
+            'canary': (0, 255, 255), 'banana': (140, 255, 255), 'cream': (220, 255, 245),
+            'butter': (180, 240, 255), 'ivory': (240, 255, 255), 'champagne': (207, 248, 247),
+            'mustard': (0, 219, 255),
+            
+            # Greens
+            'green': (0, 255, 0), 'lime': (0, 255, 128), 'forest': (34, 139, 34),
+            'emerald': (80, 200, 120), 'jade': (100, 180, 150), 'mint': (152, 255, 152),
+            'olive': (0, 128, 128), 'sage': (158, 189, 147), 'pine': (1, 121, 111),
+            'moss': (100, 148, 125), 'kelly': (76, 187, 23), 'chartreuse': (0, 255, 127),
+            
+            # Cyans/Teals
+            'cyan': (255, 255, 0), 'teal': (128, 128, 0), 'turquoise': (208, 224, 64),
+            'aqua': (255, 255, 0), 'seafoam': (159, 226, 191), 'mint_blue': (175, 238, 238),
+            'powder_blue': (230, 224, 176),
+            
+            # Blues
+            'blue': (255, 0, 0), 'navy': (128, 0, 0), 'royal': (225, 105, 65),
+            'sky': (235, 206, 135), 'azure': (255, 255, 240), 'cobalt': (153, 76, 0),
+            'sapphire': (146, 82, 15), 'steel': (180, 130, 70), 'denim': (151, 96, 21),
+            'periwinkle': (197, 203, 199), 'cornflower': (237, 149, 100),
+            
+            # Purples/Violets
+            'purple': (128, 0, 128), 'violet': (238, 130, 238), 'indigo': (130, 0, 75),
+            'plum': (173, 100, 221), 'lavender': (250, 230, 230), 'orchid': (214, 112, 218),
+            'amethyst': (204, 153, 153), 'lilac': (200, 162, 200), 'mauve': (176, 196, 222),
+            'eggplant': (97, 64, 81), 'grape': (111, 45, 168),
+            
+            # Pinks/Magentas
+            'pink': (203, 192, 255), 'magenta': (255, 0, 255), 'fuchsia': (255, 0, 255),
+            'hot_pink': (180, 105, 255), 'rose_pink': (255, 102, 204), 'blush': (254, 192, 203),
+            'salmon': (114, 128, 250), 'flamingo': (252, 142, 172), 'bubblegum': (255, 193, 204),
+            'carnation': (255, 166, 201),
+            
+            # Browns/Tans
+            'brown': (42, 42, 165), 'tan': (140, 180, 210), 'beige': (245, 245, 220),
+            'khaki': (189, 183, 107), 'chocolate': (30, 105, 210), 'coffee': (111, 78, 55),
+            'caramel': (175, 200, 255), 'cinnamon': (123, 63, 0), 'chestnut': (149, 69, 53),
+            'mahogany': (192, 64, 0), 'sienna': (45, 82, 160),
+            
+            # Neutrals
+            'white': (255, 255, 255), 'black': (50, 50, 50), 'gray': (128, 128, 128),
+            'silver': (192, 192, 192), 'charcoal': (54, 69, 79), 'slate': (112, 128, 144),
+            'pearl': (234, 224, 200), 'ash': (178, 190, 181), 'smoke': (115, 130, 118),
+            
+            # Specialty Colors
+            'neon_green': (0, 255, 0), 'neon_pink': (255, 20, 147), 'neon_blue': (30, 144, 255),
+            'neon_yellow': (255, 255, 0), 'electric_blue': (125, 249, 255), 'hot_magenta': (255, 29, 206),
+            'lime_green': (50, 205, 50),
+        }
         
-        # Find the largest contour
-        largest_contour = max(contours, key=cv2.contourArea)
-        
-        # Only proceed if contour is large enough
-        min_area = st.session_state.get('min_area', 300)
-        if cv2.contourArea(largest_contour) < min_area:
-            return None, None
-        
-        # Calculate center using moments
-        M = cv2.moments(largest_contour)
-        if M["m00"] != 0:
-            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-            return center, largest_contour
-        
-        return None, None
-    
-    def detect_all_colors(self, frame):
-        """Detect all colors in the frame and return detected objects"""
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        detected_objects = []
-        
+        # Process each color
         for color_name in self.color_ranges.keys():
-            # Create mask for this color
-            mask = self.create_color_mask(hsv, color_name)
+            mask = self.create_color_mask(hsv_image, color_name)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            # Find largest contour for this color
-            center, contour = self.find_largest_contour(mask)
+            color_bgr = color_bgr_map.get(color_name, (255, 255, 255))
             
-            if center is not None and contour is not None:
+            for contour in contours:
                 area = cv2.contourArea(contour)
-                detected_objects.append({
-                    'color': color_name,
-                    'center': center,
-                    'contour': contour,
-                    'area': area,
-                    'bgr_color': self.color_bgr[color_name]
-                })
-        
-        # Sort by area (largest first)
-        detected_objects.sort(key=lambda x: x['area'], reverse=True)
-        
-        return detected_objects
-    
-    def update_tracking_trails(self, detected_objects):
-        """Update tracking trails for all detected objects"""
-        current_colors = set()
-        
-        for obj in detected_objects:
-            color_name = obj['color']
-            center = obj['center']
-            current_colors.add(color_name)
-            
-            # Initialize trail if new color
-            if color_name not in self.tracked_objects:
-                self.tracked_objects[color_name] = collections.deque(maxlen=self.buffer_size)
-            
-            # Add current center to trail
-            self.tracked_objects[color_name].appendleft(center)
-        
-        # Remove trails for colors not currently detected (optional - commented out to keep trails longer)
-        # colors_to_remove = set(self.tracked_objects.keys()) - current_colors
-        # for color in colors_to_remove:
-        #     del self.tracked_objects[color]
-    
-    def draw_all_tracking_info(self, frame, detected_objects):
-        """Draw tracking information for all detected objects"""
-        self.update_tracking_trails(detected_objects)
-        
-        # Draw trails for all tracked colors
-        trail_thickness = st.session_state.get('trail_thickness', 2)
-        
-        for color_name, points in self.tracked_objects.items():
-            color_bgr = self.color_bgr.get(color_name, (255, 255, 255))
-            
-            for i in range(1, len(points)):
-                if points[i - 1] is None or points[i] is None:
-                    continue
                 
-                # Calculate thickness (thicker = more recent)
-                thickness = int(np.sqrt(self.buffer_size / float(i + 1)) * trail_thickness)
-                cv2.line(frame, points[i - 1], points[i], color_bgr, max(1, thickness))
+                if area > self.min_area:
+                    # Get bounding rectangle
+                    x, y, w, h = cv2.boundingRect(contour)
+                    center_x = x + w // 2
+                    center_y = y + h // 2
+                    
+                    # Calculate confidence
+                    confidence = min(100, int((area / 1000) * 20))
+                    
+                    # Draw detection
+                    cv2.rectangle(result_image, (x, y), (x + w, y + h), color_bgr, 3)
+                    cv2.circle(result_image, (center_x, center_y), 5, color_bgr, -1)
+                    
+                    # Add label
+                    label = color_name.replace('_', ' ').upper()
+                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+                    cv2.rectangle(result_image, (x, y - label_size[1] - 10), 
+                                (x + label_size[0], y), color_bgr, -1)
+                    cv2.putText(result_image, label, (x, y - 5), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    
+                    detected_colors.append({
+                        'color': color_name.replace('_', ' ').title(),
+                        'area': int(area),
+                        'confidence': confidence,
+                        'position': (center_x, center_y),
+                        'dimensions': (w, h)
+                    })
         
-        # Draw current detection info
-        for i, obj in enumerate(detected_objects):
-            color_name = obj['color']
-            center = obj['center']
-            contour = obj['contour']
-            area = obj['area']
-            color_bgr = obj['bgr_color']
-            
-            # Draw bounding rectangle
-            x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color_bgr, 2)
-            
-            # Draw center point
-            cv2.circle(frame, center, 8, color_bgr, -1)
-            cv2.circle(frame, center, 3, (255, 255, 255), -1)
-            
-            # Draw label
-            label = f"{color_name}: {int(area)}px²"
-            label_pos = (x, y - 10 if y > 20 else y + h + 20)
-            
-            # Draw label background
-            (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(frame, (label_pos[0] - 2, label_pos[1] - label_h - 2), 
-                         (label_pos[0] + label_w + 2, label_pos[1] + 2), color_bgr, -1)
-            
-            # Draw label text
-            cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # Draw summary info
-        cv2.putText(frame, f"Objects Detected: {len(detected_objects)}", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
-        if detected_objects:
-            colors_detected = [obj['color'] for obj in detected_objects]
-            colors_text = ", ".join(colors_detected[:3])  # Show first 3 colors
-            if len(detected_objects) > 3:
-                colors_text += f" +{len(detected_objects)-3} more"
-            
-            cv2.putText(frame, f"Colors: {colors_text}", (10, 60), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-        
-        return frame
-    
-    def process_frame(self, frame):
-        """Process frame for multi-color detection and tracking"""
-        if frame is None:
-            return None, []
-        
-        # Detect all colors in frame
-        detected_objects = self.detect_all_colors(frame)
-        
-        # Draw tracking information
-        tracked_frame = self.draw_all_tracking_info(frame.copy(), detected_objects)
-        
-        return tracked_frame, detected_objects
+        return result_image, detected_colors
 
 def main():
-    st.set_page_config(
-        page_title="Multi-Color Tracking",
-        page_icon="🌈",
-        layout="wide"
-    )
+    st.set_page_config(page_title="Ultra Color Detection - 70+ Colors", layout="wide")
     
-    st.title("🌈 Multi-Color Object Detection & Tracking")
-    st.markdown("### Automatically detect and track all colored objects in real-time")
+    # Initialize detector
+    if 'detector' not in st.session_state:
+        st.session_state.detector = UltraColorDetector()
     
-    # Initialize session state
-    if 'tracker' not in st.session_state:
-        st.session_state.tracker = MultiColorTracker()
-    if 'camera_active' not in st.session_state:
-        st.session_state.camera_active = False
+    st.title("🌈 Ultra Color Detection - 70+ Colors")
+    st.markdown("**Advanced AI-powered color detection system with 70+ trained colors**")
     
-    # Sidebar controls
-    st.sidebar.header("🎛️ Camera Controls")
+    # Camera input
+    uploaded_file = st.camera_input("📸 Capture Image")
     
-    # Camera selection
-    camera_index = st.sidebar.selectbox("Select Camera:", [0, 1, 2], index=0)
-    
-    # Camera control buttons
-    col1, col2 = st.sidebar.columns(2)
-    
-    with col1:
-        if st.button("📹 Start Camera"):
-            if st.session_state.tracker.start_camera(camera_index):
-                st.session_state.camera_active = True
-                st.sidebar.success("Camera started!")
-            else:
-                st.sidebar.error("Failed to start camera!")
-    
-    with col2:
-        if st.button("⏹️ Stop Camera"):
-            st.session_state.tracker.stop_camera()
-            st.session_state.camera_active = False
-            st.sidebar.info("Camera stopped!")
-    
-    # Detection settings
-    st.sidebar.subheader("⚙️ Detection Settings")
-    
-    min_area = st.sidebar.slider("Minimum Object Size:", 100, 2000, 300, 50)
-    st.session_state.min_area = min_area
-    
-    kernel_size = st.sidebar.slider("Noise Filter:", 3, 15, 5, 2)
-    st.session_state.kernel_size = kernel_size
-    
-    trail_thickness = st.sidebar.slider("Trail Thickness:", 1, 5, 2)
-    st.session_state.trail_thickness = trail_thickness
-    
-    if st.sidebar.button("🧹 Clear All Trails"):
-        st.session_state.tracker.tracked_objects.clear()
-    
-    # Main content area
-    if st.session_state.camera_active:
-        # Video display
-        st.subheader("📹 Live Multi-Color Tracking")
-        video_placeholder = st.empty()
-        
-        # Stats area
-        stats_col1, stats_col2, stats_col3 = st.columns(3)
-        
-        with stats_col1:
-            status_placeholder = st.empty()
-        with stats_col2:
-            objects_placeholder = st.empty()
-        with stats_col3:
-            colors_placeholder = st.empty()
-        
-        # Real-time processing loop
-        try:
-            status_placeholder.success("🟢 Camera Active - Detecting All Colors")
-            
-            while st.session_state.camera_active:
-                # Get latest frame from camera
-                frame = st.session_state.tracker.get_latest_frame()
+    # Start detection button
+    if st.button("🔍 Start Ultra Detection", type="primary", use_container_width=True):
+        if uploaded_file is not None:
+            try:
+                # Process the image
+                image = Image.open(uploaded_file)
                 
-                if frame is not None:
-                    # Process frame for multi-color detection
-                    tracked_frame, detected_objects = st.session_state.tracker.process_frame(frame)
+                with st.spinner("🤖 Analyzing image with 70+ color models..."):
+                    result_image, detected_colors = st.session_state.detector.detect_colors(image)
+                
+                # Convert result back to RGB for display
+                result_rgb = cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB)
+                
+                # Display results
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("📷 Original Image")
+                    st.image(image, use_container_width=True)
+                
+                with col2:
+                    st.subheader("🎨 Detected Colors")
+                    st.image(result_rgb, use_container_width=True)
+                
+                # Show results
+                if detected_colors:
+                    st.subheader("📊 Detection Results")
+                    st.success(f"🎯 **{len(detected_colors)} color objects detected!**")
                     
-                    if tracked_frame is not None:
-                        # Convert for display
-                        tracked_rgb = cv2.cvtColor(tracked_frame, cv2.COLOR_BGR2RGB)
-                        video_placeholder.image(tracked_rgb, channels="RGB", use_column_width=True)
+                    # Sort by confidence
+                    detected_colors.sort(key=lambda x: x['confidence'], reverse=True)
+                    
+                    # Display top detections
+                    cols = st.columns(3)
+                    for i, detection in enumerate(detected_colors[:9]):  # Show top 9
+                        with cols[i % 3]:
+                            st.markdown(f"**🎨 {detection['color']}**")
+                            st.markdown(f"📏 Area: {detection['area']:,} px")
+                            st.markdown(f"🎯 Confidence: {detection['confidence']}%")
+                            st.progress(detection['confidence']/100)
+                            st.markdown("---")
+                    
+                    if len(detected_colors) > 9:
+                        st.info(f"Showing top 9 detections. Total: {len(detected_colors)}")
+                    
+                    # Statistics
+                    st.subheader("📈 Statistics")
+                    stat_cols = st.columns(4)
+                    with stat_cols[0]:
+                        st.metric("Total Objects", len(detected_colors))
+                    with stat_cols[1]:
+                        unique_colors = len(set(d['color'] for d in detected_colors))
+                        st.metric("Unique Colors", unique_colors)
+                    with stat_cols[2]:
+                        avg_conf = sum(d['confidence'] for d in detected_colors) / len(detected_colors)
+                        st.metric("Avg Confidence", f"{avg_conf:.1f}%")
+                    with stat_cols[3]:
+                        total_area = sum(d['area'] for d in detected_colors)
+                        st.metric("Total Area", f"{total_area:,}")
                         
-                        # Update stats
-                        objects_placeholder.metric("🎯 Objects Detected", len(detected_objects))
-                        
-                        if detected_objects:
-                            colors_list = [obj['color'] for obj in detected_objects]
-                            unique_colors = len(set(colors_list))
-                            colors_placeholder.metric("🌈 Unique Colors", unique_colors)
-                        else:
-                            colors_placeholder.metric("🌈 Unique Colors", 0)
-                
-                # Small delay to prevent overwhelming the interface
-                time.sleep(0.05)
-                
-        except Exception as e:
-            st.error(f"Error during tracking: {str(e)}")
-            st.session_state.camera_active = False
-            st.session_state.tracker.stop_camera()
-            
-    else:
-        st.info("👆 Click 'Start Camera' in the sidebar to begin multi-color tracking")
+                else:
+                    st.warning("🔍 No colors detected. Try:")
+                    st.markdown("• Better lighting")
+                    st.markdown("• Closer objects") 
+                    st.markdown("• Solid color objects")
+                    st.markdown("• Clean background")
+                    
+            except Exception as e:
+                st.error(f"❌ Error processing image: {str(e)}")
+        else:
+            st.error("📸 Please capture a photo first!")
+    
+    # Color information sidebar
+    with st.sidebar:
+        st.header("🌈 Supported Colors (70+)")
         
-        # Color legend
-        st.subheader("🎨 Detectable Colors")
+        color_categories = {
+            "🔴 Reds": ["Red", "Crimson", "Scarlet", "Cherry", "Rose", "Burgundy", "Maroon", "Ruby", "Coral", "Brick"],
+            "🟠 Oranges": ["Orange", "Tangerine", "Peach", "Apricot", "Amber", "Copper", "Bronze", "Rust", "Papaya", "Mango"],
+            "🟡 Yellows": ["Yellow", "Gold", "Lemon", "Canary", "Banana", "Cream", "Butter", "Ivory", "Champagne", "Mustard"],
+            "🟢 Greens": ["Green", "Lime", "Forest", "Emerald", "Jade", "Mint", "Olive", "Sage", "Pine", "Moss", "Kelly", "Chartreuse"],
+            "🔵 Blues": ["Blue", "Navy", "Royal", "Sky", "Azure", "Cobalt", "Sapphire", "Steel", "Denim", "Periwinkle", "Cornflower"],
+            "🟣 Purples": ["Purple", "Violet", "Indigo", "Plum", "Lavender", "Orchid", "Amethyst", "Lilac", "Mauve", "Eggplant", "Grape"],
+            "🩷 Pinks": ["Pink", "Magenta", "Fuchsia", "Hot Pink", "Rose Pink", "Blush", "Salmon", "Flamingo", "Bubblegum", "Carnation"],
+            "🤎 Browns": ["Brown", "Tan", "Beige", "Khaki", "Chocolate", "Coffee", "Caramel", "Cinnamon", "Chestnut", "Mahogany", "Sienna"],
+            "⚫ Neutrals": ["White", "Black", "Gray", "Silver", "Charcoal", "Slate", "Pearl", "Ash", "Smoke"],
+            "✨ Special": ["Neon Green", "Neon Pink", "Neon Blue", "Neon Yellow", "Electric Blue", "Hot Magenta", "Lime Green"]
+        }
         
-        color_cols = st.columns(4)
-        colors = ['Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Purple', 'Pink']
+        for category, colors in color_categories.items():
+            with st.expander(category):
+                for color in colors:
+                    st.markdown(f"• {color}")
         
-        for i, color in enumerate(colors):
-            with color_cols[i % 4]:
-                st.markdown(f"**{color}**")
+        st.markdown("---")
+        st.markdown("**🎯 Features:**")
+        st.markdown("• 70+ Color Detection")
+        st.markdown("• HSV Color Analysis")
+        st.markdown("• Noise Reduction")
+        st.markdown("• Confidence Scoring")
+        st.markdown("• Real-time Processing")
 
 if __name__ == "__main__":
     main()

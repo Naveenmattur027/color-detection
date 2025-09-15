@@ -383,24 +383,9 @@ def main():
                 st.error(f"❌ Error processing image: {str(e)}")
         else:
             st.error("📸 Please capture a photo first!")
-    
-    # Color information sidebar
-    with st.sidebar:
-        st.header("🌈 Supported Colors (70+)")
-        
-        color_categories = {
-            "🔴 Reds": ["Red", "Crimson", "Scarlet", "Cherry", "Rose", "Burgundy", "Maroon", "Ruby", "Coral", "Brick"],
-            "🟠 Oranges": ["Orange", "Tangerine", "Peach", "Apricot", "Amber", "Copper", "Bronze", "Rust", "Papaya", "Mango"],
-            "🟡 Yellows": ["Yellow", "Gold", "Lemon", "Canary", "Banana", "Cream", "Butter", "Ivory", "Champagne", "Mustard"],
-            "🟢 Greens": ["Green", "Lime", "Forest", "Emerald", "Jade", "Mint", "Olive", "Sage", "Pine", "Moss", "Kelly", "Chartreuse"],
-            "🔵 Blues": ["Blue", "Navy", "Royal", "Sky", "Azure", "Cobalt", "Sapphire", "Steel", "Denim", "Periwinkle", "Cornflower"],
-            "🟣 Purples": ["Purple", "Violet", "Indigo", "Plum", "Lavender", "Orchid", "Amethyst", "Lilac", "Mauve", "Eggplant", "Grape"],
-            "🩷 Pinks": ["Pink", "Magenta", "Fuchsia", "Hot Pink", "Rose Pink", "Blush", "Salmon", "Flamingo", "Bubblegum", "Carnation"],
-            "🤎 Browns": ["Brown", "Tan", "Beige", "Khaki", "Chocolate", "Coffee", "Caramel", "Cinnamon", "Chestnut", "Mahogany", "Sienna"],
-            "⚫ Neutrals": ["White", "Black", "Gray", "Silver", "Charcoal", "Slate", "Pearl", "Ash", "Smoke"],
-            "✨ Special": ["Neon Green", "Neon Pink", "Neon Blue", "Neon Yellow", "Electric Blue", "Hot Magenta", "Lime Green"]
         }
 
 if __name__ == "__main__":
     main()
+
 

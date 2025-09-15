@@ -3,9 +3,9 @@ import cv2
 import numpy as np
 from PIL import Image
 
-class UltraColorDetector:
+class MajorColorDetector:
     def __init__(self):
-        """Initialize with comprehensive color database - 100+ colors"""
+        """Initialize with comprehensive color database - focus on major colors only"""
         
         # Comprehensive HSV color ranges for maximum detection
         self.color_ranges = {
@@ -141,8 +141,11 @@ class UltraColorDetector:
             'lime_green': [(np.array([70, 200, 180]), np.array([85, 255, 255]))],
         }
         
-        # Detection settings
-        self.min_area = 300
+        # INCREASED thresholds for major content detection only
+        self.min_area = 2000  # Increased from 300 to 2000
+        self.min_width = 50   # Minimum width for valid detection
+        self.min_height = 50  # Minimum height for valid detection
+        self.area_threshold_percent = 0.5  # Must be at least 0.5% of image area
     
     def preprocess_image(self, image):
         """Preprocess image for better color detection"""
@@ -166,7 +169,7 @@ class UltraColorDetector:
         return image, hsv
     
     def create_color_mask(self, hsv_image, color_name):
-        """Create mask for specific color"""
+        """Create mask for specific color with aggressive filtering"""
         masks = []
         
         for lower, upper in self.color_ranges[color_name]:
@@ -178,19 +181,119 @@ class UltraColorDetector:
         for mask in masks[1:]:
             combined_mask = cv2.bitwise_or(combined_mask, mask)
         
-        # Apply morphological operations
-        kernel = np.ones((3, 3), np.uint8)
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
-        combined_mask = cv2.medianBlur(combined_mask, 5)
+        # ENHANCED morphological operations to remove small particles
+        kernel_small = np.ones((3, 3), np.uint8)
+        kernel_large = np.ones((7, 7), np.uint8)  # Larger kernel for more aggressive filtering
+        
+        # Multiple opening operations to remove small noise
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel_small, iterations=2)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel_large, iterations=1)
+        
+        # Closing to fill gaps in major objects
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel_large, iterations=2)
+        
+        # Median blur to smooth edges
+        combined_mask = cv2.medianBlur(combined_mask, 9)  # Increased blur radius
         
         return combined_mask
     
+    def filter_major_contours(self, contours, image_area):
+        """Filter contours to keep only major content"""
+        major_contours = []
+        
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Calculate area percentage of total image
+            area_percent = (area / image_area) * 100
+            
+            # Multiple filtering criteria
+            is_large_enough = area > self.min_area
+            is_wide_enough = w > self.min_width
+            is_tall_enough = h > self.min_height
+            is_significant_area = area_percent > self.area_threshold_percent
+            
+            # Aspect ratio check - avoid very thin lines or weird shapes
+            aspect_ratio = max(w, h) / min(w, h) if min(w, h) > 0 else float('inf')
+            is_reasonable_shape = aspect_ratio < 10  # Not too elongated
+            
+            # Solidity check - how "solid" the shape is (removes scattered pixels)
+            hull = cv2.convexHull(contour)
+            hull_area = cv2.contourArea(hull)
+            solidity = area / hull_area if hull_area > 0 else 0
+            is_solid = solidity > 0.3  # At least 30% solid
+            
+            if (is_large_enough and is_wide_enough and is_tall_enough and 
+                is_significant_area and is_reasonable_shape and is_solid):
+                major_contours.append(contour)
+        
+        return major_contours
+    
+    def merge_nearby_detections(self, detected_colors, merge_distance=100):
+        """Merge nearby detections of the same color to reduce redundancy"""
+        if not detected_colors:
+            return detected_colors
+        
+        merged_colors = []
+        processed = set()
+        
+        for i, detection in enumerate(detected_colors):
+            if i in processed:
+                continue
+                
+            current_color = detection['color']
+            current_pos = detection['position']
+            merged_area = detection['area']
+            merged_detections = [detection]
+            
+            # Find nearby detections of same color
+            for j, other_detection in enumerate(detected_colors[i+1:], i+1):
+                if j in processed:
+                    continue
+                    
+                if other_detection['color'] == current_color:
+                    other_pos = other_detection['position']
+                    distance = np.sqrt((current_pos[0] - other_pos[0])**2 + 
+                                     (current_pos[1] - other_pos[1])**2)
+                    
+                    if distance < merge_distance:
+                        merged_area += other_detection['area']
+                        merged_detections.append(other_detection)
+                        processed.add(j)
+            
+            # Create merged detection
+            if len(merged_detections) > 1:
+                # Calculate average position weighted by area
+                total_area = sum(d['area'] for d in merged_detections)
+                avg_x = sum(d['position'][0] * d['area'] for d in merged_detections) / total_area
+                avg_y = sum(d['position'][1] * d['area'] for d in merged_detections) / total_area
+                
+                merged_detection = {
+                    'color': current_color,
+                    'area': merged_area,
+                    'confidence': min(100, int((merged_area / 2000) * 20)),
+                    'position': (int(avg_x), int(avg_y)),
+                    'dimensions': merged_detections[0]['dimensions'],  # Use first one's dimensions
+                    'merged_count': len(merged_detections)
+                }
+            else:
+                merged_detection = detection
+                merged_detection['merged_count'] = 1
+            
+            merged_colors.append(merged_detection)
+            processed.add(i)
+        
+        return merged_colors
+    
     def detect_colors(self, image):
-        """Detect all colors in the image"""
+        """Detect only major colors in the image"""
         original_image, hsv_image = self.preprocess_image(image)
         detected_colors = []
         result_image = original_image.copy()
+        
+        # Calculate image area for percentage calculations
+        image_area = original_image.shape[0] * original_image.shape[1]
         
         # Color mapping for visualization (BGR)
         color_bgr_map = {
@@ -263,63 +366,94 @@ class UltraColorDetector:
             mask = self.create_color_mask(hsv_image, color_name)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
+            # Filter to get only major contours
+            major_contours = self.filter_major_contours(contours, image_area)
+            
             color_bgr = color_bgr_map.get(color_name, (255, 255, 255))
             
-            for contour in contours:
+            for contour in major_contours:
                 area = cv2.contourArea(contour)
+                x, y, w, h = cv2.boundingRect(contour)
+                center_x = x + w // 2
+                center_y = y + h // 2
                 
-                if area > self.min_area:
-                    # Get bounding rectangle
-                    x, y, w, h = cv2.boundingRect(contour)
-                    center_x = x + w // 2
-                    center_y = y + h // 2
-                    
-                    # Calculate confidence
-                    confidence = min(100, int((area / 1000) * 20))
-                    
-                    # Draw detection
-                    cv2.rectangle(result_image, (x, y), (x + w, y + h), color_bgr, 3)
-                    cv2.circle(result_image, (center_x, center_y), 5, color_bgr, -1)
-                    
-                    # Add label
-                    label = color_name.replace('_', ' ').upper()
-                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
-                    cv2.rectangle(result_image, (x, y - label_size[1] - 10), 
-                                (x + label_size[0], y), color_bgr, -1)
-                    cv2.putText(result_image, label, (x, y - 5), 
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    
-                    detected_colors.append({
-                        'color': color_name.replace('_', ' ').title(),
-                        'area': int(area),
-                        'confidence': confidence,
-                        'position': (center_x, center_y),
-                        'dimensions': (w, h)
-                    })
+                # Calculate confidence based on area and image percentage
+                area_percent = (area / image_area) * 100
+                confidence = min(100, int(area_percent * 10))  # Better confidence calculation
+                
+                # Draw detection with thicker lines for major objects
+                cv2.rectangle(result_image, (x, y), (x + w, y + h), color_bgr, 4)
+                cv2.circle(result_image, (center_x, center_y), 8, color_bgr, -1)
+                
+                # Add label with larger font for major detections
+                label = color_name.replace('_', ' ').upper()
+                label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+                cv2.rectangle(result_image, (x, y - label_size[1] - 15), 
+                            (x + label_size[0] + 10, y), color_bgr, -1)
+                cv2.putText(result_image, label, (x + 5, y - 8), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                
+                # Add area percentage info
+                area_text = f"{area_percent:.1f}%"
+                cv2.putText(result_image, area_text, (x, y + h + 20), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_bgr, 2)
+                
+                detected_colors.append({
+                    'color': color_name.replace('_', ' ').title(),
+                    'area': int(area),
+                    'area_percent': round(area_percent, 2),
+                    'confidence': confidence,
+                    'position': (center_x, center_y),
+                    'dimensions': (w, h)
+                })
+        
+        # Merge nearby detections to reduce redundancy
+        detected_colors = self.merge_nearby_detections(detected_colors)
         
         return result_image, detected_colors
 
 def main():
-    st.set_page_config(page_title="Ultra Color Detection - 70+ Colors", layout="wide")
+    st.set_page_config(page_title="Major Color Detection - Focus on Main Content", layout="wide")
     
     # Initialize detector
     if 'detector' not in st.session_state:
-        st.session_state.detector = UltraColorDetector()
+        st.session_state.detector = MajorColorDetector()
     
-    st.title(" Color Detection using openCV")
-    st.markdown("**Advanced AI-powered color detection system **")
+    st.title("🎯 Major Color Detection System")
+    st.markdown("**Advanced AI-powered detection focusing only on major color content**")
+    st.info("🔍 This system filters out small particles and focuses only on major color areas (>0.5% of image)")
+    
+    # Settings sidebar
+    st.sidebar.header("🛠️ Detection Settings")
+    
+    # Allow user to adjust thresholds
+    min_area = st.sidebar.slider("Minimum Area (pixels)", 500, 5000, 2000)
+    area_threshold = st.sidebar.slider("Area Threshold (%)", 0.1, 2.0, 0.5, 0.1)
+    merge_distance = st.sidebar.slider("Merge Distance (pixels)", 50, 200, 100)
+    
+    # Update detector settings
+    st.session_state.detector.min_area = min_area
+    st.session_state.detector.area_threshold_percent = area_threshold
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**📋 Filtering Criteria:**")
+    st.sidebar.markdown(f"• Minimum area: {min_area:,} pixels")
+    st.sidebar.markdown(f"• Must be >{area_threshold}% of image")
+    st.sidebar.markdown("• Minimum 50x50 pixels")
+    st.sidebar.markdown("• Aspect ratio < 10:1")
+    st.sidebar.markdown("• Solidity > 30%")
     
     # Camera input
-    uploaded_file = st.camera_input(" Capture Image")
+    uploaded_file = st.camera_input("📸 Capture Image for Major Color Detection")
     
     # Start detection button
-    if st.button("🔍 Start  Detection", type="primary", use_container_width=True):
+    if st.button("🔍 Detect Major Colors Only", type="primary", use_container_width=True):
         if uploaded_file is not None:
             try:
                 # Process the image
                 image = Image.open(uploaded_file)
                 
-                with st.spinner("Analyzing image"):
+                with st.spinner("🔍 Analyzing major color content..."):
                     result_image, detected_colors = st.session_state.detector.detect_colors(image)
                 
                 # Convert result back to RGB for display
@@ -329,63 +463,171 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.subheader(" Original Image")
+                    st.subheader("📷 Original Image")
                     st.image(image, use_container_width=True)
                 
                 with col2:
-                    st.subheader("Detected Colors")
+                    st.subheader("🎯 Major Colors Detected")
                     st.image(result_rgb, use_container_width=True)
                 
                 # Show results
                 if detected_colors:
-                    st.subheader("📊 Detection Results")
-                    st.success(f"🎯 **{len(detected_colors)} color objects detected!**")
+                    st.subheader("📊 Major Color Detection Results")
+                    st.success(f"🎯 **{len(detected_colors)} major color regions detected!**")
                     
-                    # Sort by confidence
-                    detected_colors.sort(key=lambda x: x['confidence'], reverse=True)
+                    # Sort by area percentage (largest first)
+                    detected_colors.sort(key=lambda x: x['area_percent'], reverse=True)
                     
-                    # Display top detections
-                    cols = st.columns(3)
-                    for i, detection in enumerate(detected_colors[:9]):  # Show top 9
-                        with cols[i % 3]:
-                            st.markdown(f"**🎨 {detection['color']}**")
-                            st.markdown(f" Area: {detection['area']:,} px")
-                            st.markdown(f" Confidence: {detection['confidence']}%")
-                            st.progress(detection['confidence']/100)
-                            st.markdown("---")
+                    # Display detailed results
+                    st.subheader("🏆 Top Major Color Regions")
                     
-                    if len(detected_colors) > 9:
-                        st.info(f"Showing top 9 detections. Total: {len(detected_colors)}")
+                    for i, detection in enumerate(detected_colors[:6], 1):  # Show top 6
+                        with st.container():
+                            cols = st.columns([1, 3, 2, 2, 2])
+                            
+                            with cols[0]:
+                                st.markdown(f"**#{i}**")
+                            
+                            with cols[1]:
+                                st.markdown(f"**🎨 {detection['color']}**")
+                                if 'merged_count' in detection and detection['merged_count'] > 1:
+                                    st.caption(f"(Merged from {detection['merged_count']} regions)")
+                            
+                            with cols[2]:
+                                st.metric("Area", f"{detection['area']:,} px")
+                                st.caption(f"{detection['area_percent']}% of image")
+                            
+                            with cols[3]:
+                                st.metric("Confidence", f"{detection['confidence']}%")
+                                st.progress(detection['confidence']/100)
+                            
+                            with cols[4]:
+                                w, h = detection['dimensions']
+                                st.metric("Size", f"{w}×{h}")
+                                st.caption(f"Position: {detection['position']}")
+                            
+                            st.divider()
                     
-                    # Statistics
-                    st.subheader("📈 Statistics")
+                    if len(detected_colors) > 6:
+                        st.info(f"📋 Showing top 6 major regions. Total detected: {len(detected_colors)}")
+                    
+                    # Enhanced Statistics
+                    st.subheader("📈 Detailed Analysis")
+                    
+                    # Main stats row
                     stat_cols = st.columns(4)
                     with stat_cols[0]:
-                        st.metric("Total Objects", len(detected_colors))
+                        st.metric("Major Regions", len(detected_colors))
                     with stat_cols[1]:
                         unique_colors = len(set(d['color'] for d in detected_colors))
                         st.metric("Unique Colors", unique_colors)
                     with stat_cols[2]:
-                        avg_conf = sum(d['confidence'] for d in detected_colors) / len(detected_colors)
-                        st.metric("Avg Confidence", f"{avg_conf:.1f}%")
+                        total_coverage = sum(d['area_percent'] for d in detected_colors)
+                        st.metric("Total Coverage", f"{total_coverage:.1f}%")
                     with stat_cols[3]:
-                        total_area = sum(d['area'] for d in detected_colors)
-                        st.metric("Total Area", f"{total_area:,}")
+                        avg_size = sum(d['area'] for d in detected_colors) / len(detected_colors)
+                        st.metric("Avg Region Size", f"{avg_size:,.0f} px")
+                    
+                    # Coverage breakdown
+                    st.subheader("📊 Color Coverage Analysis")
+                    
+                    coverage_data = {}
+                    for detection in detected_colors:
+                        color = detection['color']
+                        if color in coverage_data:
+                            coverage_data[color] += detection['area_percent']
+                        else:
+                            coverage_data[color] = detection['area_percent']
+                    
+                    # Sort by coverage
+                    sorted_coverage = sorted(coverage_data.items(), key=lambda x: x[1], reverse=True)
+                    
+                    coverage_cols = st.columns(2)
+                    with coverage_cols[0]:
+                        st.markdown("**🏆 Top Colors by Coverage:**")
+                        for color, coverage in sorted_coverage[:5]:
+                            st.markdown(f"• **{color}**: {coverage:.2f}%")
+                            st.progress(coverage/20)  # Scale for visualization
+                    
+                    with coverage_cols[1]:
+                        st.markdown("**📏 Size Distribution:**")
+                        large_regions = len([d for d in detected_colors if d['area_percent'] > 2])
+                        medium_regions = len([d for d in detected_colors if 1 <= d['area_percent'] <= 2])
+                        small_regions = len([d for d in detected_colors if d['area_percent'] < 1])
+                        
+                        st.markdown(f"• **Large regions (>2%)**: {large_regions}")
+                        st.markdown(f"• **Medium regions (1-2%)**: {medium_regions}")
+                        st.markdown(f"• **Small regions (<1%)**: {small_regions}")
+                    
+                    # Quality indicators
+                    st.subheader("✅ Detection Quality")
+                    quality_cols = st.columns(3)
+                    
+                    with quality_cols[0]:
+                        high_conf = len([d for d in detected_colors if d['confidence'] > 70])
+                        st.metric("High Confidence", f"{high_conf}/{len(detected_colors)}")
+                        st.caption("(>70% confidence)")
+                    
+                    with quality_cols[1]:
+                        large_areas = len([d for d in detected_colors if d['area'] > 5000])
+                        st.metric("Large Areas", f"{large_areas}/{len(detected_colors)}")
+                        st.caption("(>5000 pixels)")
+                    
+                    with quality_cols[2]:
+                        merged_count = sum(d.get('merged_count', 1) for d in detected_colors)
+                        st.metric("Total Regions", merged_count)
+                        st.caption("(before merging)")
                         
                 else:
-                    st.warning("🔍 No colors detected. Try:")
-                    st.markdown("• Better lighting")
-                    st.markdown("• Closer objects") 
-                    st.markdown("• Solid color objects")
-                    st.markdown("• Clean background")
+                    st.warning("🔍 No major color regions detected!")
+                    st.markdown("**Possible reasons:**")
+                    st.markdown("• Image may contain only small color particles")
+                    st.markdown("• Colors may be too scattered or fragmented") 
+                    st.markdown("• Try adjusting the detection thresholds in the sidebar")
+                    st.markdown("• Ensure good lighting and clear color boundaries")
+                    
+                    st.info("💡 **Tips for better detection:**")
+                    st.markdown("• Lower the minimum area threshold")
+                    st.markdown("• Use images with distinct, solid color objects")
+                    st.markdown("• Ensure objects are at least 50x50 pixels")
+                    st.markdown("• Avoid images with too much texture or patterns")
                     
             except Exception as e:
                 st.error(f"❌ Error processing image: {str(e)}")
+                st.exception(e)  # Show full error for debugging
         else:
             st.error("📸 Please capture a photo first!")
+            
+    # Additional info section
+    with st.expander("ℹ️ How Major Color Detection Works"):
+        st.markdown("""
+        **🎯 Advanced Filtering System:**
+        
+        **1. Size Filtering:**
+        - Minimum area threshold (default: 2000 pixels)
+        - Minimum dimensions (50x50 pixels)
+        - Must occupy significant portion of image (>0.5%)
+        
+        **2. Shape Analysis:**
+        - Aspect ratio check (width:height < 10:1)
+        - Solidity measurement (>30% solid)
+        - Removes scattered pixels and thin lines
+        
+        **3. Morphological Processing:**
+        - Multiple opening operations remove noise
+        - Closing operations fill gaps in major objects
+        - Enhanced median filtering for smooth edges
+        
+        **4. Smart Merging:**
+        - Combines nearby regions of same color
+        - Reduces redundant detections
+        - Provides cleaner final results
+        
+        **5. Quality Metrics:**
+        - Confidence based on area percentage
+        - Coverage analysis shows dominant colors
+        - Detailed statistics for each detection
+        """)
 
 if __name__ == "__main__":
     main()
-
-
-

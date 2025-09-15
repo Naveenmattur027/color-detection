@@ -306,20 +306,20 @@ def main():
     if 'detector' not in st.session_state:
         st.session_state.detector = UltraColorDetector()
     
-    st.title("🌈 Ultra Color Detection - 70+ Colors")
-    st.markdown("**Advanced AI-powered color detection system with 70+ trained colors**")
+    st.title("Color Detection using openCV")
+    st.markdown("Advanced AI-powered color detection system ")
     
     # Camera input
-    uploaded_file = st.camera_input("📸 Capture Image")
+    uploaded_file = st.camera_input(" Capture Image")
     
     # Start detection button
-    if st.button("🔍 Start Ultra Detection", type="primary", use_container_width=True):
+    if st.button("🔍 Start Detection", type="primary", use_container_width=True):
         if uploaded_file is not None:
             try:
                 # Process the image
                 image = Image.open(uploaded_file)
                 
-                with st.spinner("🤖 Analyzing image with 70+ color models..."):
+                with st.spinner(" Analyzing image "):
                     result_image, detected_colors = st.session_state.detector.detect_colors(image)
                 
                 # Convert result back to RGB for display
@@ -384,35 +384,6 @@ def main():
         else:
             st.error("📸 Please capture a photo first!")
     
-    # Color information sidebar
-    with st.sidebar:
-        st.header("🌈 Supported Colors (70+)")
-        
-        color_categories = {
-            "🔴 Reds": ["Red", "Crimson", "Scarlet", "Cherry", "Rose", "Burgundy", "Maroon", "Ruby", "Coral", "Brick"],
-            "🟠 Oranges": ["Orange", "Tangerine", "Peach", "Apricot", "Amber", "Copper", "Bronze", "Rust", "Papaya", "Mango"],
-            "🟡 Yellows": ["Yellow", "Gold", "Lemon", "Canary", "Banana", "Cream", "Butter", "Ivory", "Champagne", "Mustard"],
-            "🟢 Greens": ["Green", "Lime", "Forest", "Emerald", "Jade", "Mint", "Olive", "Sage", "Pine", "Moss", "Kelly", "Chartreuse"],
-            "🔵 Blues": ["Blue", "Navy", "Royal", "Sky", "Azure", "Cobalt", "Sapphire", "Steel", "Denim", "Periwinkle", "Cornflower"],
-            "🟣 Purples": ["Purple", "Violet", "Indigo", "Plum", "Lavender", "Orchid", "Amethyst", "Lilac", "Mauve", "Eggplant", "Grape"],
-            "🩷 Pinks": ["Pink", "Magenta", "Fuchsia", "Hot Pink", "Rose Pink", "Blush", "Salmon", "Flamingo", "Bubblegum", "Carnation"],
-            "🤎 Browns": ["Brown", "Tan", "Beige", "Khaki", "Chocolate", "Coffee", "Caramel", "Cinnamon", "Chestnut", "Mahogany", "Sienna"],
-            "⚫ Neutrals": ["White", "Black", "Gray", "Silver", "Charcoal", "Slate", "Pearl", "Ash", "Smoke"],
-            "✨ Special": ["Neon Green", "Neon Pink", "Neon Blue", "Neon Yellow", "Electric Blue", "Hot Magenta", "Lime Green"]
-        }
-        
-        for category, colors in color_categories.items():
-            with st.expander(category):
-                for color in colors:
-                    st.markdown(f"• {color}")
-        
-        st.markdown("---")
-        st.markdown("**🎯 Features:**")
-        st.markdown("• 70+ Color Detection")
-        st.markdown("• HSV Color Analysis")
-        st.markdown("• Noise Reduction")
-        st.markdown("• Confidence Scoring")
-        st.markdown("• Real-time Processing")
-
 if __name__ == "__main__":
     main()
+

@@ -306,20 +306,20 @@ def main():
     if 'detector' not in st.session_state:
         st.session_state.detector = UltraColorDetector()
     
-    st.title("🌈 Ultra Color Detection - 70+ Colors")
-    st.markdown("**Advanced AI-powered color detection system with 70+ trained colors**")
+    st.title(" Color Detection using openCV")
+    st.markdown("**Advanced AI-powered color detection system **")
     
     # Camera input
-    uploaded_file = st.camera_input("📸 Capture Image")
+    uploaded_file = st.camera_input(" Capture Image")
     
     # Start detection button
-    if st.button("🔍 Start Ultra Detection", type="primary", use_container_width=True):
+    if st.button("🔍 Start  Detection", type="primary", use_container_width=True):
         if uploaded_file is not None:
             try:
                 # Process the image
                 image = Image.open(uploaded_file)
                 
-                with st.spinner("🤖 Analyzing image with 70+ color models..."):
+                with st.spinner("Analyzing image"):
                     result_image, detected_colors = st.session_state.detector.detect_colors(image)
                 
                 # Convert result back to RGB for display
@@ -329,11 +329,11 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.subheader("📷 Original Image")
+                    st.subheader(" Original Image")
                     st.image(image, use_container_width=True)
                 
                 with col2:
-                    st.subheader("🎨 Detected Colors")
+                    st.subheader("Detected Colors")
                     st.image(result_rgb, use_container_width=True)
                 
                 # Show results
@@ -349,8 +349,8 @@ def main():
                     for i, detection in enumerate(detected_colors[:9]):  # Show top 9
                         with cols[i % 3]:
                             st.markdown(f"**🎨 {detection['color']}**")
-                            st.markdown(f"📏 Area: {detection['area']:,} px")
-                            st.markdown(f"🎯 Confidence: {detection['confidence']}%")
+                            st.markdown(f" Area: {detection['area']:,} px")
+                            st.markdown(f" Confidence: {detection['confidence']}%")
                             st.progress(detection['confidence']/100)
                             st.markdown("---")
                     
@@ -400,19 +400,7 @@ def main():
             "⚫ Neutrals": ["White", "Black", "Gray", "Silver", "Charcoal", "Slate", "Pearl", "Ash", "Smoke"],
             "✨ Special": ["Neon Green", "Neon Pink", "Neon Blue", "Neon Yellow", "Electric Blue", "Hot Magenta", "Lime Green"]
         }
-        
-        for category, colors in color_categories.items():
-            with st.expander(category):
-                for color in colors:
-                    st.markdown(f"• {color}")
-        
-        st.markdown("---")
-        st.markdown("**🎯 Features:**")
-        st.markdown("• 70+ Color Detection")
-        st.markdown("• HSV Color Analysis")
-        st.markdown("• Noise Reduction")
-        st.markdown("• Confidence Scoring")
-        st.markdown("• Real-time Processing")
 
 if __name__ == "__main__":
     main()
+

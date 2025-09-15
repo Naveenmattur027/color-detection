@@ -383,9 +383,9 @@ def main():
                 st.error(f"❌ Error processing image: {str(e)}")
         else:
             st.error("📸 Please capture a photo first!")
-        }
 
 if __name__ == "__main__":
     main()
+
 
 
